@@ -66,8 +66,9 @@ def predict_label(query, label_list):
         "labels": ", ".join(VALID_LABELS) 
     })
 
-    prediction = response.label
+    print(label_list)
     if prediction not in label_list:
         prediction = ""
 
+    print(prediction+"Chatbot response")
     return prediction

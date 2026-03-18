@@ -1,10 +1,12 @@
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk, messagebox
+from tkinter import scrolledtext
 import sqlite3
 from datetime import date
 import pandas as pd
 import dashboard
+import sell_chatbot
 
 sell_id = None
 
@@ -89,7 +91,6 @@ def open_sell():
         conn.commit()
         fetch_data()
         clear_sell()
-        sell_summary()
         messagebox.showinfo("ERP Billing", "Sell saved successfully")
 
     def clear_sell():
@@ -169,7 +170,7 @@ def open_sell():
         conn.commit()
         fetch_data()
         clear_sell()
-        sell_summary()
+        
 
     def on_delete():
         global sell_id
@@ -182,7 +183,7 @@ def open_sell():
 
         fetch_data()
         clear_sell()
-        sell_summary()
+        
 
     # ---------- Analysis ----------
     def data_analysis():
@@ -302,18 +303,48 @@ def open_sell():
         # ---------- Show Result ----------
         messagebox.showinfo("ERP Data Analysis", data)
 
+    # ---------- Chatbot Response ----------
+    def chatbot_response():
+        response = sell_chatbot.chatbot_response(entry_chat.get())
+        add_message("user",entry_chat.get())
+        entry_chat.delete(0, tk.END)
+        add_message("",response)
 
-    # ---------- Summary ----------
-    def sell_summary():
-        df = pd.read_sql_query("SELECT * FROM sell", conn)
+    #---- style the font of chatbot ----
+    def add_message(sender, message):
+        chat_display.tag_config("user_tag",
+                        font=("Segoe UI", 10, "bold"),
+                        foreground="#1f6aa5")
 
-        if df.empty:
-            total_label.config(text="Total Sell Records : 0")
-            return
+        chat_display.tag_config("bot_tag",
+                            font=("Segoe UI", 10, "bold"),
+                            foreground="#2e7d32")
+        
+        chat_display.config(state="normal")
 
-        total_label.config(text=f"Total Sell Records : {len(df)}")
-        total_qty_label.config(text=f"Total Quantity : {df['product_quantity'].sum()}")
-        total_amount_label.config(text=f"Total Amount : ₹ {round(df['total_amount'].sum(),2)}")
+        if sender == "user":
+            chat_display.insert(END, f"             \nYou:\n", "user_tag")
+            chat_display.insert(END, f"{message}\n")
+
+        else:
+            chat_display.insert(END, f"\nMitra:\n", "bot_tag")
+            chat_display.insert(END, f"{message}\n")
+
+        chat_display.insert(END, "\n")
+        chat_display.config(state="disabled")
+        chat_display.yview(END)
+
+    # # ---------- Summary ----------
+    # def sell_summary():
+    #     df = pd.read_sql_query("SELECT * FROM sell", conn)
+
+    #     if df.empty:
+    #         total_label.config(text="Total Sell Records : 0")
+    #         return
+
+    #     total_label.config(text=f"Total Sell Records : {len(df)}")
+    #     total_qty_label.config(text=f"Total Quantity : {df['product_quantity'].sum()}")
+    #     total_amount_label.config(text=f"Total Amount : ₹ {round(df['total_amount'].sum(),2)}")
 
     def move_back():
         root.destroy()
@@ -423,20 +454,69 @@ def open_sell():
 
     tree.bind("<<TreeviewSelect>>", on_select)
 
-    # ---------- Summary ----------
-    summary_frame = Frame(root, bg="#f0f2f5")
-    summary_frame.pack(pady=10)
+    # # ---------- Summary ----------
+    # summary_frame = Frame(root, bg="#f0f2f5")
+    # summary_frame.pack(pady=10)
 
-    total_label = Label(summary_frame, font=("Segoe UI", 11, "bold"), bg="#f0f2f5")
-    total_label.pack()
+    # total_label = Label(summary_frame, font=("Segoe UI", 11, "bold"), bg="#f0f2f5")
+    # total_label.pack()
 
-    total_qty_label = Label(summary_frame, font=("Segoe UI", 10), bg="#f0f2f5")
-    total_qty_label.pack()
+    # total_qty_label = Label(summary_frame, font=("Segoe UI", 10), bg="#f0f2f5")
+    # total_qty_label.pack()
 
-    total_amount_label = Label(summary_frame, font=("Segoe UI", 10), bg="#f0f2f5")
-    total_amount_label.pack()
+    # total_amount_label = Label(summary_frame, font=("Segoe UI", 10), bg="#f0f2f5")
+    # total_amount_label.pack()
+
+    # =============================
+    # -------- CHATBOT UI ---------
+    # =============================
+    # ---------- Chatbot Frame (Right Side or Bottom Section) ----------
+    chat_frame = Frame(main_frame, bg="white")
+    chat_frame.pack(side=BOTTOM, fill=BOTH, expand=True, padx=10, pady=10)
+
+    # ---------- Header ----------
+    chat_header = Frame(chat_frame, bg="#1f6aa5", height=40)
+    chat_header.pack(fill=X)
+
+    Label(chat_header,
+          text="🤖 ERP AI Assistant",
+          font=("Segoe UI", 12, "bold"),
+          bg="#1f6aa5",
+          fg="white").pack(pady=5)
+
+    # ---------- Chat Display ----------
+    chat_display = scrolledtext.ScrolledText(
+        chat_frame,
+        height=12,
+        font=("Segoe UI", 10),
+        wrap=WORD,
+        bd=0,
+        relief="flat",
+        bg="#f9fafb"
+    )
+
+    chat_display.pack(fill=BOTH, expand=True, padx=10, pady=10)
+    chat_display.config(state="disabled")
+
+    # ---------- Input Section ----------
+    input_frame = Frame(chat_frame, bg="white")
+    input_frame.pack(fill=X, padx=10, pady=10)
+
+    entry_chat = ttk.Entry(
+        input_frame,
+        font=("Segoe UI", 10),
+        width=50
+    )
+    entry_chat.pack(side=LEFT, fill=X, expand=True, padx=(0, 10))
+
+    ttk.Button(
+        input_frame,
+        text="Send",
+        width=12,
+        command=chatbot_response
+    ).pack(side=RIGHT)
 
     fetch_data()
-    sell_summary()
+    # sell_summary()                                            
 
     root.mainloop()

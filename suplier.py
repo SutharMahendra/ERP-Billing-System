@@ -13,7 +13,6 @@ cursor = conn.cursor()
 
 seller_id = None
 
-
 def open_suplier():
     global seller_id
 
@@ -196,10 +195,10 @@ def open_suplier():
     #---- CHATBOT RESPONSE ----
     def chatbot_response():
 
-        # response = suplier_chatbot.chatbot_response(entry_chat.get(),"")
+        response = suplier_chatbot.chatbot_response(entry_chat.get())
         add_message("user",entry_chat.get())
         entry_chat.delete(0,tk.END)
-        add_message("", "hello who are you")
+        add_message("", response)
 
     #---- style the font of chatbot ----
     def add_message(sender, message):

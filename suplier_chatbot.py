@@ -16,21 +16,19 @@ def chatbot_response(user_query):
             # basic
             "count", "list",
             # field search
-            "find_phone","find_company","find_seller"
+            "find_phone","find_company","find_seller",
             # filters
             "filter_city", "filter_company",
             # count
             "count_with_gst", "count_without_gst",
         ]
-
+        
         if user_input == None or user_input == "":
             prediction = ""
         else: 
             prediction = erp_chatbot.predict_label(user_input, SELLER_LABELS)
 
         response = "Sorry, I didn't understand the question."
-        
-        print(prediction)
         
         # ---- Count Prediction ----
         if prediction == "count":
@@ -118,17 +116,18 @@ def chatbot_response(user_query):
 
            # Step 2: Get all seller names
            seller_list = df["seller_name"].astype(str).tolist()
-
+          
            # Step 3: Fuzzy match
            match = process.extractOne(clean_input, seller_list)
 
            if match:
                seller_name = match[0]
-
+               
                # Step 4: Get matching data
                result = df[df["seller_name"] == seller_name]
-
+               
                if not result.empty:
+                   
                    response = f"👤 Seller Found: {seller_name}\n\n"
 
                    for _, row in result.iterrows():
@@ -158,7 +157,7 @@ def chatbot_response(user_query):
                 "",
                 user_input.lower()
             ).strip()
-
+        
             # Step 3: Match city using fuzzy matching
             match = process.extractOne(clean_input, city_list)
 
@@ -206,5 +205,4 @@ def chatbot_response(user_query):
 
             response = f"📊 Buyers with GST: {count}"
         
-        print(response)
         return response
