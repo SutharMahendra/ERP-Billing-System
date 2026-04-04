@@ -1,93 +1,117 @@
 import tkinter as tk
-from tkinter import *
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, END, FLAT, BOTH, X, Y, LEFT, RIGHT, W, EW, BOTTOM, NW
 import sqlite3
 from datetime import date
 import pandas as pd
 import dashboard
 
+# ─── Color Palette (matches dashboard) ───────────────────────────────────────
+C_BG      = "#0f1117"
+C_CARD    = "#1c2230"
+C_ACCENT  = "#00d4aa"
+C_ACCENT2 = "#4f8ef7"
+C_ACCENT3 = "#f7a94f"
+C_ACCENT4 = "#f7604f"
+C_TEXT    = "#e8eaf0"
+C_MUTED   = "#7a8499"
+C_HEADER  = "#12192b"
+C_BORDER  = "#2a3345"
+C_INPUT   = "#242d3d"
+C_HOVER   = "#00b894"
+C_PURPLE  = "#b44fff"
+
+# ─── Reusable helpers ─────────────────────────────────────────────────────────
+def styled_entry(parent, textvariable=None, width=28, readonly=False):
+    state_bg = "#1a1f2e" if readonly else C_INPUT
+    e = tk.Entry(parent, textvariable=textvariable, width=width,
+                 bg=state_bg, fg=C_TEXT, insertbackground=C_TEXT,
+                 relief=FLAT, font=("Segoe UI", 10),
+                 highlightthickness=1,
+                 highlightbackground=C_BORDER,
+                 highlightcolor=C_ACCENT,
+                 state="readonly" if readonly else "normal",
+                 readonlybackground=state_bg)
+    return e
+
+def action_button(parent, text, color, command, width=11):
+    return tk.Button(parent, text=text, width=width,
+                     font=("Segoe UI", 10, "bold"),
+                     bg=color, fg=C_BG,
+                     activebackground=C_HOVER, activeforeground=C_BG,
+                     relief=FLAT, padx=8, pady=6,
+                     cursor="hand2", command=command)
+
+def styled_combo(parent, textvariable, values, width=27):
+    style = ttk.Style()
+    style.configure("Dark.TCombobox",
+                    fieldbackground=C_INPUT,
+                    background=C_INPUT,
+                    foreground=C_TEXT,
+                    arrowcolor=C_ACCENT,
+                    borderwidth=0,
+                    font=("Segoe UI", 10))
+    style.map("Dark.TCombobox",
+              fieldbackground=[("readonly", C_INPUT)],
+              foreground=[("readonly", C_TEXT)])
+    return ttk.Combobox(parent, textvariable=textvariable,
+                        values=values, state="readonly",
+                        width=width, style="Dark.TCombobox",
+                        font=("Segoe UI", 10))
+
+def kpi_card(parent, label, color):
+    frm = tk.Frame(parent, bg=C_CARD,
+                   highlightbackground=C_BORDER, highlightthickness=1)
+    tk.Frame(frm, bg=color, height=3).pack(fill=X)
+    tk.Label(frm, text=label, font=("Segoe UI", 8),
+             bg=C_CARD, fg=C_MUTED).pack(anchor=W, padx=10, pady=(6, 0))
+    val = tk.Label(frm, text="—", font=("Segoe UI", 15, "bold"),
+                   bg=C_CARD, fg=C_TEXT)
+    val.pack(anchor=W, padx=10, pady=(2, 8))
+    return frm, val
+
+
 purchase_id = None
+
 
 def open_purchase():
     global purchase_id
 
-    conn = sqlite3.connect("ERP_Billing.db")
+    conn   = sqlite3.connect("ERP_Billing.db")
     cursor = conn.cursor()
 
     root = tk.Tk()
-    root.title("Purchase Management Dashboard")
+    root.title("ERP Billing System – Purchase Management")
     root.state("zoomed")
-    root.configure(bg="#f0f2f5")
+    root.configure(bg=C_BG)
 
-    # ---------- Styling ----------
-    style = ttk.Style()
-    style.theme_use("clam")
+    # ── Variables ─────────────────────────────────────────────────────────
+    bill_var         = tk.StringVar()
+    seller_id_var    = tk.StringVar()
+    user_id_var      = tk.StringVar()
+    purchase_date_var= tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
+    product_id_var   = tk.StringVar()
+    quantity_var     = tk.StringVar()
+    price_var        = tk.StringVar()
+    gst_rate_var     = tk.StringVar()
+    gst_amount_var   = tk.StringVar()
+    total_amount_var = tk.StringVar()
 
-    style.configure("TLabel", font=("Segoe UI", 11), background="#f0f2f5")
-    style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=8)
-    style.configure("Treeview", font=("Segoe UI", 10), rowheight=28)
-    style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
+    # ═══════════════════════════════════════════════════════════════════════
+    # FUNCTIONS
+    # ═══════════════════════════════════════════════════════════════════════
 
-    # ---------- Variables ----------
-    bill_var = StringVar()
-    seller_id_var = StringVar()
-    user_id_var = StringVar()
-    purchase_date_var = StringVar(value=date.today().strftime("%Y-%m-%d"))
-    product_id_var = StringVar()
-    quantity_var = StringVar()
-    price_var = StringVar()
-    gst_rate_var = StringVar()
-    gst_amount_var = StringVar()
-    total_amount_var = StringVar()
-
-    # ---------- Functions ----------
-    # ---------- Calculate Amount ----------
     def calculate_amount(*args):
         try:
-            qty = float(quantity_var.get())
+            qty   = float(quantity_var.get())
             price = float(price_var.get())
-            gst = float(gst_rate_var.get())
-
-            amount = qty * price
+            gst   = float(gst_rate_var.get())
+            amount  = qty * price
             gst_amt = amount * gst / 100
-            total = amount + gst_amt
-
+            total   = amount + gst_amt
             gst_amount_var.set(round(gst_amt, 2))
             total_amount_var.set(round(total, 2))
-        except:
+        except Exception:
             pass
-
-    def save_purchase():
-        if bill_var.get() == "" or product_id_var.get() == "":
-            messagebox.showerror("ERP Billing", "Bill Number & Product required")
-            return
-
-        cursor.execute("""
-            INSERT INTO purchase (
-                bill_number, seller_id, user_id, purchase_date,
-                product_id, product_quantity, product_price,
-                product_gst_rate, gst_amount, total_amount, remark
-            )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            bill_var.get(),
-            seller_id_var.get(),
-            user_id_var.get(),
-            purchase_date_var.get(),
-            product_id_var.get(),
-            quantity_var.get(),
-            price_var.get(),
-            gst_rate_var.get(),
-            gst_amount_var.get(),
-            total_amount_var.get(),
-            remark_text.get("1.0", END).strip()
-        ))
-
-        conn.commit()
-        fetch_data()
-        clear_purchase()
-        purchase_summary()
-        messagebox.showinfo("ERP Billing", "Purchase saved successfully")
 
     def clear_purchase():
         global purchase_id
@@ -95,6 +119,7 @@ def open_purchase():
         bill_var.set("")
         seller_id_var.set("")
         user_id_var.set("")
+        purchase_date_var.set(date.today().strftime("%Y-%m-%d"))
         product_id_var.set("")
         quantity_var.set("")
         price_var.set("")
@@ -107,36 +132,58 @@ def open_purchase():
         tree.delete(*tree.get_children())
         cursor.execute("SELECT * FROM purchase")
         rows = cursor.fetchall()
-        for row in rows:
-            tree.insert("", END, values=row)
+        for idx, row in enumerate(rows):
+            tag = "odd" if idx % 2 == 0 else "even"
+            tree.insert("", END, values=row, tags=(tag,))
+        purchase_summary()
+
+    def save_purchase():
+        if not bill_var.get() or not product_id_var.get():
+            messagebox.showerror("ERP Billing", "Bill Number & Product are required!")
+            return
+        cursor.execute("""
+            INSERT INTO purchase (
+                bill_number, seller_id, user_id, purchase_date,
+                product_id, product_quantity, product_price,
+                product_gst_rate, gst_amount, total_amount, remark
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            bill_var.get(), seller_id_var.get(), user_id_var.get(),
+            purchase_date_var.get(), product_id_var.get(),
+            quantity_var.get(), price_var.get(), gst_rate_var.get(),
+            gst_amount_var.get(), total_amount_var.get(),
+            remark_text.get("1.0", END).strip()
+        ))
+        conn.commit()
+        messagebox.showinfo("ERP Billing", "Purchase Saved Successfully ✅")
+        fetch_data()
+        clear_purchase()
 
     def on_select(event):
         global purchase_id
         selected = tree.focus()
-        if selected:
-            data = tree.item(selected)["values"]
-            purchase_id = data[0]
-
-            bill_var.set(data[1])
-            seller_id_var.set(data[2])
-            user_id_var.set(data[3])
-            purchase_date_var.set(data[4])
-            product_id_var.set(data[5])
-            quantity_var.set(data[6])
-            price_var.set(data[7])
-            gst_rate_var.set(data[8])
-            gst_amount_var.set(data[9])
-            total_amount_var.set(data[10])
-
-            remark_text.delete("1.0", END)
-            remark_text.insert(END, data[11])
+        if not selected:
+            return
+        data = tree.item(selected)["values"]
+        purchase_id = data[0]
+        bill_var.set(data[1])
+        seller_id_var.set(data[2])
+        user_id_var.set(data[3])
+        purchase_date_var.set(data[4])
+        product_id_var.set(data[5])
+        quantity_var.set(data[6])
+        price_var.set(data[7])
+        gst_rate_var.set(data[8])
+        gst_amount_var.set(data[9])
+        total_amount_var.set(data[10])
+        remark_text.delete("1.0", END)
+        remark_text.insert(END, data[11])
 
     def on_update():
         global purchase_id
         if not purchase_id:
-            messagebox.showerror("ERP Billing", "Select record to update")
+            messagebox.showerror("ERP Billing", "Please select a record to update!")
             return
-
         cursor.execute("""
             UPDATE purchase SET
                 bill_number=?, seller_id=?, user_id=?, purchase_date=?,
@@ -144,377 +191,304 @@ def open_purchase():
                 product_gst_rate=?, gst_amount=?, total_amount=?, remark=?
             WHERE purchase_id=?
         """, (
-            bill_var.get(),
-            seller_id_var.get(),
-            user_id_var.get(),
-            purchase_date_var.get(),
-            product_id_var.get(),
-            quantity_var.get(),
-            price_var.get(),
-            gst_rate_var.get(),
-            gst_amount_var.get(),
-            total_amount_var.get(),
+            bill_var.get(), seller_id_var.get(), user_id_var.get(),
+            purchase_date_var.get(), product_id_var.get(),
+            quantity_var.get(), price_var.get(), gst_rate_var.get(),
+            gst_amount_var.get(), total_amount_var.get(),
             remark_text.get("1.0", END).strip(),
             purchase_id
         ))
-
         conn.commit()
+        messagebox.showinfo("ERP Billing", "Purchase Updated Successfully ✅")
         fetch_data()
         clear_purchase()
-        purchase_summary()
 
     def on_delete():
         global purchase_id
         if not purchase_id:
-            messagebox.showerror("ERP Billing", "Select record to delete")
+            messagebox.showerror("ERP Billing", "Please select a record to delete!")
             return
+        if messagebox.askyesno("ERP Billing", "Are you sure you want to delete this record?"):
+            cursor.execute("DELETE FROM purchase WHERE purchase_id=?", (purchase_id,))
+            conn.commit()
+            messagebox.showinfo("ERP Billing", "Record Deleted ✅")
+            fetch_data()
+            clear_purchase()
 
-        cursor.execute("DELETE FROM purchase WHERE purchase_id=?", (purchase_id,))
-        conn.commit()
+    def purchase_summary():
+        def safe(q):
+            cursor.execute(q)
+            v = cursor.fetchone()[0]
+            return v if v is not None else 0
 
-        fetch_data()
-        clear_purchase()
-        purchase_summary()
+        kpi_records_val.config(text=str(safe("SELECT COUNT(purchase_id) FROM purchase")))
+        kpi_qty_val.config(text=str(safe("SELECT SUM(product_quantity) FROM purchase")))
+        amt = safe("SELECT SUM(total_amount) FROM purchase")
+        kpi_total_val.config(text=f"₹{amt:,.2f}")
+        gst = safe("SELECT SUM(gst_amount) FROM purchase")
+        kpi_gst_val.config(text=f"₹{gst:,.2f}")
+        max_a = safe("SELECT MAX(total_amount) FROM purchase")
+        kpi_max_val.config(text=f"₹{max_a:,.2f}")
+        min_a = safe("SELECT MIN(total_amount) FROM purchase")
+        kpi_min_val.config(text=f"₹{min_a:,.2f}")
 
-    # ---------- Data Analysis ----------
     def data_analysis():
         df = pd.read_sql_query("""
-        SELECT s.purchase_id,
-               s.seller_id,
-               s.product_id,
-               s.product_quantity,
-               s.product_price,
-               s.total_amount,
-               p.product_name,
-               p.product_category,
-               sel.seller_company_name
-        FROM purchase as s
-        LEFT JOIN product p ON s.product_id = p.product_id
-        LEFT JOIN seller sel ON s.seller_id = sel.seller_id
-    """, conn)
+            SELECT s.purchase_id, s.seller_id, s.product_id,
+                   s.product_quantity, s.product_price, s.total_amount,
+                   p.product_name, p.product_category,
+                   sel.seller_company_name
+            FROM purchase s
+            LEFT JOIN product p  ON s.product_id = p.product_id
+            LEFT JOIN seller sel ON s.seller_id  = sel.seller_id
+        """, conn)
 
         if df.empty:
             messagebox.showinfo("ERP", "No data available for analysis.")
             return
-        
-        data = ""
-        
-        # ------------------------------------------------
-        # Product Quantity Analysis
-        # ------------------------------------------------
-        grouped_product = df.groupby("product_name")["product_quantity"].sum().round(2)
-        
-        top_product = grouped_product.idxmax()
-        top_product_qty = grouped_product.max()
-        
-        least_product = grouped_product.idxmin()
-        least_product_qty = grouped_product.min()
-        
-        # ------------------------------------------------
-        # Seller Quantity Analysis
-        # ------------------------------------------------
+
+        grouped_product    = df.groupby("product_name")["product_quantity"].sum().round(2)
         grouped_seller_qty = df.groupby("seller_company_name")["product_quantity"].sum().round(2)
-        
-        top_seller = grouped_seller_qty.idxmax()
-        top_seller_qty = grouped_seller_qty.max()
-        
-        least_seller = grouped_seller_qty.idxmin()
-        least_seller_qty = grouped_seller_qty.min()
-        
-        # ------------------------------------------------
-        # Seller Profit Analysis
-        # ------------------------------------------------
-        grouped_profit = df.groupby("seller_company_name")["total_amount"].sum().round(2)
-        
-        profit_seller = grouped_profit.idxmax()
-        profit_amount = grouped_profit.max()
-        
-        loss_seller = grouped_profit.idxmin()
-        loss_amount = grouped_profit.min()
-        
-        # ------------------------------------------------
-        # Price Analysis
-        # ------------------------------------------------
-        highest_price_row = df.loc[df["product_price"].idxmax()]
-        lowest_price_row = df.loc[df["product_price"].idxmin()]
-        
-        
-        # =================================================
-        # FORMAT OUTPUT
-        # =================================================
-        data += "╔══════════════════════════════════════╗\n"
+        grouped_profit     = df.groupby("seller_company_name")["total_amount"].sum().round(2)
+        highest_price_row  = df.loc[df["product_price"].idxmax()]
+        lowest_price_row   = df.loc[df["product_price"].idxmin()]
+
+        data  = "╔══════════════════════════════════════╗\n"
         data += "║        ERP PURCHASE ANALYSIS         ║\n"
         data += "╚══════════════════════════════════════╝\n\n"
-        
-        
-        # ---------- Product Quantity ----------
         data += "PRODUCT QUANTITY ANALYSIS\n"
-        data += "------------------------------------------------\n"
-        data += f"Top Product (Most Purchased)   : {top_product}\n"
-        data += f"Total Quantity                 : {top_product_qty}\n\n"
-        
-        data += f"Least Purchased Product        : {least_product}\n"
-        data += f"Total Quantity                 : {least_product_qty}\n\n"
-        
-        
-        # ---------- Seller Quantity ----------
+        data += "─" * 46 + "\n"
+        data += f"Top Product (Most Purchased)    : {grouped_product.idxmax()}\n"
+        data += f"Total Quantity                  : {grouped_product.max()}\n\n"
+        data += f"Least Purchased Product         : {grouped_product.idxmin()}\n"
+        data += f"Total Quantity                  : {grouped_product.min()}\n\n"
         data += "SELLER SUPPLY ANALYSIS\n"
-        data += "------------------------------------------------\n"
-        data += f"Top Seller (Highest Supply)    : {top_seller}\n"
-        data += f"Total Quantity Supplied        : {top_seller_qty}\n\n"
-        
-        data += f"Least Seller (Lowest Supply)   : {least_seller}\n"
-        data += f"Total Quantity Supplied        : {least_seller_qty}\n\n"
-        
-        
-        # ---------- Profit Analysis ----------
-        data += "SELLER PROFIT ANALYSIS\n"
-        data += "------------------------------------------------\n"
-        data += f"Most Profitable Seller         : {profit_seller}\n"
-        data += f"Total Business Value           : ₹ {profit_amount}\n\n"
-        
-        data += f"Least Profitable Seller        : {loss_seller}\n"
-        data += f"Total Business Value           : ₹ {loss_amount}\n\n"
-        
-        
-        # ---------- Price Analysis ----------
+        data += "─" * 46 + "\n"
+        data += f"Top Seller (Highest Supply)     : {grouped_seller_qty.idxmax()}\n"
+        data += f"Total Quantity Supplied         : {grouped_seller_qty.max()}\n\n"
+        data += f"Least Seller (Lowest Supply)    : {grouped_seller_qty.idxmin()}\n"
+        data += f"Total Quantity Supplied         : {grouped_seller_qty.min()}\n\n"
+        data += "SELLER BUSINESS VALUE ANALYSIS\n"
+        data += "─" * 46 + "\n"
+        data += f"Highest Value Seller            : {grouped_profit.idxmax()}\n"
+        data += f"Total Business Value            : ₹ {grouped_profit.max():,.2f}\n\n"
+        data += f"Lowest Value Seller             : {grouped_profit.idxmin()}\n"
+        data += f"Total Business Value            : ₹ {grouped_profit.min():,.2f}\n\n"
         data += "PRODUCT PRICE ANALYSIS\n"
-        data += "------------------------------------------------\n"
-        data += f"Highest Price Product          : {highest_price_row['product_name']}\n"
-        data += f"Price                          : ₹ {highest_price_row['product_price']}\n\n"
-        
-        data += f"Lowest Price Product           : {lowest_price_row['product_name']}\n"
-        data += f"Price                          : ₹ {lowest_price_row['product_price']}\n\n"
-        
-        data += "=========================================="
-        
-        # ---------- Show Result ----------
-        messagebox.showinfo("ERP Data Analysis", data)
+        data += "─" * 46 + "\n"
+        data += f"Highest Price Product           : {highest_price_row['product_name']}\n"
+        data += f"Price                           : ₹ {highest_price_row['product_price']:,.2f}\n\n"
+        data += f"Lowest Price Product            : {lowest_price_row['product_name']}\n"
+        data += f"Price                           : ₹ {lowest_price_row['product_price']:,.2f}\n"
+        data += "═" * 46
 
-    # ---------- Summary Data  ----------
-    def purchase_summary():
-        cursor.execute("SELECT * FROM purchase")
-        rows = cursor.fetchall()
-
-        if not rows:
-            total_purchase_label.config(text="Total Purchase Records : 0")
-            return
-
-        import pandas as pd
-
-        df = pd.read_sql_query("SELECT * FROM purchase", conn)
-
-        # ---- Calculations ----
-        total_records = len(df)
-
-        total_quantity = df["product_quantity"].sum()
-        min_quantity = df["product_quantity"].min()
-        max_quantity = df["product_quantity"].max()
-
-        total_price = df["product_price"].sum()
-        min_price = df["product_price"].min()
-        max_price = df["product_price"].max()
-
-        total_amount = df["total_amount"].sum()
-        min_amount = df["total_amount"].min()
-        max_amount = df["total_amount"].max()
-
-        # ---- Update Labels ----
-        total_purchase_label.config(text=f"Total Purchase Records : {total_records}")
-
-        total_quantity_label.config(text=f"Total Quantity Purchased : {total_quantity}")
-        min_quantity_label.config(text=f"Minimum Quantity (Single Purchase) : {min_quantity}")
-        max_quantity_label.config(text=f"Maximum Quantity (Single Purchase) : {max_quantity}")
-
-        total_price_label.config(text=f"Total Purchase Price : ₹ {round(total_price,2)}")
-        min_price_label.config(text=f"Lowest Purchase Price : ₹ {round(min_price,2)}")
-        max_price_label.config(text=f"Highest Purchase Price : ₹ {round(max_price,2)}")
-
-        total_amount_label.config(text=f"Total Purchase Amount : ₹ {round(total_amount,2)}")
-        min_amount_label.config(text=f"Lowest Purchase Amount : ₹ {round(min_amount,2)}")
-        max_amount_label.config(text=f"Highest Purchase Amount : ₹ {round(max_amount,2)}")
+        messagebox.showinfo("ERP – Purchase Analysis", data)
 
     def move_back():
         root.destroy()
         dashboard.open_dashboard()
 
-    # ---------- Header ----------
-    header = Frame(root, bg="#1f6aa5", height=70)
+    # ═══════════════════════════════════════════════════════════════════════
+    # TREEVIEW STYLE
+    # ═══════════════════════════════════════════════════════════════════════
+    style = ttk.Style()
+    style.theme_use("clam")
+    style.configure("Dark.Treeview",
+                    background=C_CARD, foreground=C_TEXT,
+                    fieldbackground=C_CARD, rowheight=30,
+                    font=("Segoe UI", 10), borderwidth=0)
+    style.configure("Dark.Treeview.Heading",
+                    background=C_HEADER, foreground=C_ACCENT,
+                    font=("Segoe UI", 10, "bold"), relief=FLAT)
+    style.map("Dark.Treeview",
+              background=[("selected", "#1e3a5f")],
+              foreground=[("selected", C_TEXT)])
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # HEADER
+    # ═══════════════════════════════════════════════════════════════════════
+    header = tk.Frame(root, bg=C_HEADER, height=64)
     header.pack(fill=X)
+    header.pack_propagate(False)
 
-    Label(header,
-          text="Purchase Management Dashboard",
-          font=("Segoe UI", 22, "bold"),
-          bg="#1f6aa5",
-          fg="white").pack(pady=15)
+    dot = tk.Canvas(header, width=36, height=36, bg=C_HEADER, highlightthickness=0)
+    dot.pack(side=LEFT, padx=(20, 6), pady=14)
+    dot.create_oval(4, 4, 32, 32, fill=C_ACCENT, outline="")
 
-    # ---------- Main Frame ----------
-    main_frame = Frame(root, bg="#f0f2f5")
-    main_frame.pack(fill=BOTH, expand=True, padx=20, pady=20)
+    tk.Label(header, text="ERP Billing System",
+             font=("Segoe UI", 18, "bold"),
+             bg=C_HEADER, fg=C_TEXT).pack(side=LEFT, pady=14)
+    tk.Label(header, text="Purchase Management",
+             font=("Segoe UI", 11),
+             bg=C_HEADER, fg=C_MUTED).pack(side=LEFT, padx=(8, 0), pady=17)
 
-    # ---------- Left Form ----------
-    form_frame = Frame(main_frame, bg="white")
-    form_frame.pack(side=LEFT, fill=Y, padx=10, ipadx=15, ipady=15)
+    action_button(header, "← Dashboard", C_ACCENT2, move_back, width=14).pack(
+        side=RIGHT, padx=20, pady=14)
 
-    Label(form_frame,
-          text="Purchase Details",
-          font=("Segoe UI", 14, "bold"),
-          bg="white").grid(row=0, columnspan=2, pady=15)
+    # ═══════════════════════════════════════════════════════════════════════
+    # KPI ROW  (6 cards — purchase has richer summary data)
+    # ═══════════════════════════════════════════════════════════════════════
+    kpi_row = tk.Frame(root, bg=C_BG)
+    kpi_row.pack(fill=X, padx=16, pady=(14, 0))
 
-      # ---------- Product name list ----------
-    cursor.execute("SELECT product_id, product_name FROM product")
-    product_data = cursor.fetchall()
-
-    product_dict = {proid:pro_name for proid, pro_name in product_data}
-    product_name_list = list(set(product_dict.values()))
-
-    # ---------- Seller name list ----------
-    cursor.execute("SELECT seller_id, seller_company_name FROM seller")
-    seller_data = cursor.fetchall()
-
-    seller_dict = {sid:s_name for sid, s_name in seller_data}
-    seller_name_list = list(set(seller_dict.values()))
-
-    labels = [
-        "Bill Number", "Seller", "User",
-        "Purchase Date", "Product",
-        "Quantity", "Price", "GST Rate",
-        "GST Amount", "Total Amount"
+    kpi_cfgs = [
+        ("Total Records",      C_ACCENT),
+        ("Total Qty Purchased", C_ACCENT2),
+        ("Total Amount (₹)",   C_ACCENT3),
+        ("Total GST (₹)",      C_PURPLE),
+        ("Max Bill (₹)",       C_ACCENT4),
+        ("Min Bill (₹)",       C_HOVER),
     ]
 
-    for i, text in enumerate(labels):
-        ttk.Label(form_frame, text=text).grid(row=i+1, column=0, sticky=W, pady=8)
+    kpi_vals = []
+    for i, (lbl, col) in enumerate(kpi_cfgs):
+        frm, val_lbl = kpi_card(kpi_row, lbl, col)
+        frm.grid(row=0, column=i, padx=5, pady=4, sticky="nsew")
+        kpi_row.columnconfigure(i, weight=1)
+        kpi_vals.append(val_lbl)
 
-    ttk.Entry(form_frame, textvariable=bill_var, width=30).grid(row=1, column=1)
-    ttk.Combobox(form_frame, textvariable=seller_id_var, values=seller_name_list, state="readonly", width=27).grid(row=2, column=1)
-    ttk.Entry(form_frame, textvariable=user_id_var, width=30).grid(row=3, column=1)
-    ttk.Entry(form_frame, textvariable=purchase_date_var, width=30).grid(row=4, column=1)
-    ttk.Combobox(form_frame, textvariable=product_id_var, values=product_name_list, state="readonly", width=27).grid(row=5, column=1)
-    ttk.Entry(form_frame, textvariable=quantity_var, width=30).grid(row=6, column=1)
-    ttk.Entry(form_frame, textvariable=price_var, width=30).grid(row=7, column=1)
-    ttk.Entry(form_frame, textvariable=gst_rate_var, width=30).grid(row=8, column=1)
-    ttk.Entry(form_frame, textvariable=gst_amount_var, width=30, state="readonly").grid(row=9, column=1)
-    ttk.Entry(form_frame, textvariable=total_amount_var, width=30, state="readonly").grid(row=10, column=1)
+    (kpi_records_val, kpi_qty_val, kpi_total_val,
+     kpi_gst_val, kpi_max_val, kpi_min_val) = kpi_vals
 
-    ttk.Label(form_frame, text="Remark").grid(row=11, column=0, sticky=NW)
-    remark_text = Text(form_frame, width=23, height=4, font=("Segoe UI", 10))
-    remark_text.grid(row=11, column=1)
+    # ═══════════════════════════════════════════════════════════════════════
+    # MAIN LAYOUT
+    # ═══════════════════════════════════════════════════════════════════════
+    main_frame = tk.Frame(root, bg=C_BG)
+    main_frame.pack(fill=BOTH, expand=True, padx=16, pady=14)
 
+    # ── LEFT: Form card ──────────────────────────────────────────────────
+    form_card = tk.Frame(main_frame, bg=C_CARD,
+                         highlightbackground=C_BORDER, highlightthickness=1)
+    form_card.pack(side=LEFT, fill=Y, padx=(0, 10), ipadx=16, ipady=10)
+
+    tk.Frame(form_card, bg=C_ACCENT, height=3).pack(fill=X)
+    tk.Label(form_card, text="🛒  Purchase Details",
+             font=("Segoe UI", 13, "bold"),
+             bg=C_CARD, fg=C_TEXT).pack(pady=(14, 4), padx=16, anchor=W)
+    tk.Frame(form_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(0, 10))
+
+    form_inner = tk.Frame(form_card, bg=C_CARD)
+    form_inner.pack(padx=16)
+
+    # Load dropdown data
+    cursor.execute("SELECT product_id, product_name FROM product")
+    product_dict = {pid: pname for pid, pname in cursor.fetchall()}
+    product_name_list = list(set(product_dict.values()))
+
+    cursor.execute("SELECT seller_id, seller_company_name FROM seller")
+    seller_dict = {sid: sname for sid, sname in cursor.fetchall()}
+    seller_name_list = list(set(seller_dict.values()))
+
+    field_cfgs = [
+        ("Bill Number *",  "entry", bill_var,          None,               False),
+        ("Seller",         "combo", seller_id_var,     seller_name_list,   False),
+        ("User",           "entry", user_id_var,       None,               False),
+        ("Purchase Date",  "entry", purchase_date_var, None,               False),
+        ("Product *",      "combo", product_id_var,    product_name_list,  False),
+        ("Quantity",       "entry", quantity_var,       None,              False),
+        ("Price",          "entry", price_var,          None,              False),
+        ("GST Rate (%)",   "entry", gst_rate_var,       None,              False),
+        ("GST Amount",     "entry", gst_amount_var,     None,              True),
+        ("Total Amount",   "entry", total_amount_var,   None,              True),
+    ]
+
+    for i, (label, ftype, var, vals, ro) in enumerate(field_cfgs):
+        tk.Label(form_inner, text=label,
+                 font=("Segoe UI", 9),
+                 bg=C_CARD, fg=C_MUTED).grid(row=i*2, column=0,
+                                              sticky=W, pady=(8, 0))
+        if ftype == "combo":
+            w = styled_combo(form_inner, var, vals)
+        else:
+            w = styled_entry(form_inner, textvariable=var, readonly=ro)
+        w.grid(row=i*2+1, column=0, sticky=EW, pady=(2, 0))
+
+    # Auto-calc traces
     quantity_var.trace("w", calculate_amount)
     price_var.trace("w", calculate_amount)
     gst_rate_var.trace("w", calculate_amount)
 
-    # ---------- Buttons ----------
-    button_frame = Frame(form_frame, bg="white")
-    button_frame.grid(row=12, columnspan=2, pady=20)
+    # Remark
+    tk.Label(form_inner, text="Remark",
+             font=("Segoe UI", 9),
+             bg=C_CARD, fg=C_MUTED).grid(row=20, column=0, sticky=NW, pady=(8, 0))
+    remark_text = tk.Text(form_inner, width=28, height=3,
+                          font=("Segoe UI", 10),
+                          bg=C_INPUT, fg=C_TEXT,
+                          insertbackground=C_TEXT,
+                          relief=FLAT,
+                          highlightthickness=1,
+                          highlightbackground=C_BORDER,
+                          highlightcolor=C_ACCENT)
+    remark_text.grid(row=21, column=0, sticky=EW, pady=(2, 0))
 
-    ttk.Button(button_frame, text="Save", command=save_purchase).grid(row=0, column=0, padx=5)
-    ttk.Button(button_frame, text="Update", command=on_update).grid(row=0, column=1, padx=5)
-    ttk.Button(button_frame, text="Delete", command=on_delete).grid(row=0, column=2, padx=5)
-    ttk.Button(button_frame, text="Clear", command=clear_purchase).grid(row=0, column=3, padx=5)
-    ttk.Button(button_frame, text="Analysis", command=data_analysis).grid(row=0, column=4, padx=5)
-    ttk.Button(button_frame, text="Back", command=move_back).grid(row=0, column=5, padx=5)
+    # Buttons
+    tk.Frame(form_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(14, 8))
+    btn_grid = tk.Frame(form_card, bg=C_CARD)
+    btn_grid.pack(padx=16, pady=(0, 10))
 
+    btn_cfg = [
+        ("💾 Save",     C_ACCENT,  save_purchase,  0, 0),
+        ("✏️ Update",   C_ACCENT2, on_update,       0, 1),
+        ("🗑 Delete",   C_ACCENT4, on_delete,       0, 2),
+        ("✖ Clear",    C_MUTED,   clear_purchase,  1, 0),
+        ("📊 Analysis", C_ACCENT3, data_analysis,   1, 1),
+    ]
+    for text, color, cmd, r, c in btn_cfg:
+        action_button(btn_grid, text, color, cmd, width=11).grid(
+            row=r, column=c, padx=4, pady=4)
 
-    # ---------- Right Frame (Treeview) ----------
-    data_frame = Frame(main_frame, bg="white")
-    data_frame.pack(side=RIGHT, fill=BOTH, expand=True, padx=10)
+    # ── RIGHT: Table card ────────────────────────────────────────────────
+    table_card = tk.Frame(main_frame, bg=C_CARD,
+                          highlightbackground=C_BORDER, highlightthickness=1)
+    table_card.pack(side=RIGHT, fill=BOTH, expand=True)
 
-    Label(data_frame,
-          text="Purchase Records",
-          font=("Segoe UI", 14, "bold"),
-          bg="white").pack(pady=10)
+    tk.Frame(table_card, bg=C_ACCENT2, height=3).pack(fill=X)
+    tk.Label(table_card, text="📋  Purchase Records",
+             font=("Segoe UI", 13, "bold"),
+             bg=C_CARD, fg=C_TEXT).pack(anchor=W, padx=16, pady=(12, 4))
+    tk.Frame(table_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(0, 6))
 
-    columns = ("ID","Bill","Seller","User","Date","Product","Qty","Price","GST%","GST Amt","Total","Remark")
-    tree = ttk.Treeview(data_frame, columns=columns, show="headings")
+    tree_wrap = tk.Frame(table_card, bg=C_CARD)
+    tree_wrap.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
 
+    columns = ("ID", "Bill", "Seller", "User", "Date", "Product",
+               "Qty", "Price", "GST%", "GST Amt", "Total", "Remark")
+    tree = ttk.Treeview(tree_wrap, columns=columns,
+                        show="headings", style="Dark.Treeview")
+
+    col_widths = {"ID": 45, "Bill": 90, "Seller": 100, "User": 70,
+                  "Date": 95, "Product": 100, "Qty": 55, "Price": 75,
+                  "GST%": 55, "GST Amt": 80, "Total": 90, "Remark": 120}
     for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=100)
+        tree.column(col, width=col_widths.get(col, 80), anchor=W)
 
+    tree.tag_configure("odd",  background="#1a2234")
+    tree.tag_configure("even", background=C_CARD)
+
+    vsb = ttk.Scrollbar(tree_wrap, orient="vertical",   command=tree.yview)
+    hsb = ttk.Scrollbar(tree_wrap, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+    vsb.pack(side=RIGHT, fill=Y)
+    hsb.pack(side=BOTTOM, fill=X)
     tree.pack(fill=BOTH, expand=True)
-
-    scrollbar = ttk.Scrollbar(data_frame, orient=VERTICAL, command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=RIGHT, fill=Y)
-
     tree.bind("<<TreeviewSelect>>", on_select)
 
-    # ---------- Summary ----------
-    summary_frame = Frame(root, bg="#f0f2f5")
-    summary_frame.pack(pady=10)
+    # ═══════════════════════════════════════════════════════════════════════
+    # FOOTER
+    # ═══════════════════════════════════════════════════════════════════════
+    footer = tk.Frame(root, bg=C_HEADER, height=30)
+    footer.pack(fill=X, side=BOTTOM)
+    footer.pack_propagate(False)
+    tk.Label(footer,
+             text="Developed by Mahendra Suthar  ·  ERP Billing System",
+             font=("Segoe UI", 8),
+             bg=C_HEADER, fg=C_MUTED).pack(pady=7)
 
-    total_purchase_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    total_purchase_label.pack(anchor="w", pady=2)
-
-    total_quantity_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    total_quantity_label.pack(anchor="w", pady=2)
-
-    min_quantity_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    min_quantity_label.pack(anchor="w", pady=2)
-
-    max_quantity_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    max_quantity_label.pack(anchor="w", pady=2)
-
-    total_price_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    total_price_label.pack(anchor="w", pady=2)
-
-    min_price_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    min_price_label.pack(anchor="w", pady=2)
-
-    max_price_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    max_price_label.pack(anchor="w", pady=2)
-
-    total_amount_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    total_amount_label.pack(anchor="w", pady=2)
-
-    min_amount_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    min_amount_label.pack(anchor="w", pady=2)
-
-    max_amount_label = tk.Label(
-        summary_frame,
-        font=("Segoe UI", 11, "bold"),
-        bg="#f0f2f5"
-    )
-    max_amount_label.pack(anchor="w", pady=2)
-
+    # ═══════════════════════════════════════════════════════════════════════
+    # INITIAL LOAD
+    # ═══════════════════════════════════════════════════════════════════════
     fetch_data()
-    purchase_summary()
-
     root.mainloop()

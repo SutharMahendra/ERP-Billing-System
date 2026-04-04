@@ -1,9 +1,10 @@
 import os
-from langchain.chat_models import init_chat_model
 from langchain_core.prompts import PromptTemplate
+from langchain.chat_models import init_chat_model
 from pydantic import BaseModel
-from typing import Literal
 from dotenv import load_dotenv
+
+
 
 
 def predict_label(query, label_list):
@@ -23,6 +24,7 @@ def predict_label(query, label_list):
     # -----------------------------
     # Model
     # -----------------------------
+    
     model = init_chat_model("google_genai:gemini-2.5-flash-lite")
 
     structured_model = model.with_structured_output(QuestionLabel)
@@ -66,6 +68,7 @@ def predict_label(query, label_list):
         "labels": ", ".join(VALID_LABELS) 
     })
 
+    prediction = response.label
     print(label_list)
     if prediction not in label_list:
         prediction = ""

@@ -11,10 +11,11 @@ def chatbot_response(user_input):
                             SELECT bill_number, sell_date, b.buyer_company_name ,p.product_name, product_quantity, s.product_price, s.product_gst_rate, gst_amount, total_amount, payment_term
                             FROM sell s
                             LEFT JOIN buyer b ON s.buyer_id = b.buyer_id
-                            """)
+                            LEFT JOIN product p ON s.product_id = p. product_id
+                            """,conn)
     
     SELL_LABELS = [
-        "count_sell", "list_sell",
+        "count", "list_sell",
         
         "total_gst_amount",
 
@@ -62,7 +63,7 @@ def chatbot_response(user_input):
             response = "⚠️ No sales data available."
 
         else:
-            total_gst = df["product_gstamount"].sum()
+            total_gst = df["gst_amount"].sum()
             response = f"💰 Total GST Collected: ₹{total_gst}"
 
     # ---- Sell Quantity Analysis ----
@@ -102,7 +103,7 @@ def chatbot_response(user_input):
             # 👉 PRODUCT LEVEL (MOST / LEAST SOLD)
             elif "product" in user_input:
 
-                grouped = df.groupby(["product_id", "product_name"])["product_quantity"].sum().reset_index()
+                grouped = df.groupby(["product_name"])["product_quantity"].sum().reset_index()
 
                 if "most" in user_input:
                     row = grouped.loc[grouped["product_quantity"].idxmax()]
@@ -176,7 +177,7 @@ def chatbot_response(user_input):
             response = "⚠️ No sales data available."
 
         else:
-            payment_col = df["payment_type"].astype(str).str.lower()
+            payment_col = df["payment_term"].astype(str).str.lower()
 
             # 👉 COUNT SUMMARY
             if "count" in user_input or "summary" in user_input:
@@ -204,7 +205,7 @@ def chatbot_response(user_input):
 
             # 👉 TOTAL AMOUNT BY PAYMENT TYPE
             elif "total" in user_input:
-                grouped = df.groupby("payment_type")["total_amount"].sum()
+                grouped = df.groupby("payment_term")["total_amount"].sum()
 
                 response = "💰 Payment-wise Total Amount:\n\n"
                 for method, amount in grouped.items():
@@ -280,9 +281,9 @@ def chatbot_response(user_input):
                             f"📦 Product: {row['product_name']}\n"
                             f"🔢 Quantity: {row['product_quantity']}\n"
                             f"💵 Price: ₹{row['product_price']}\n"
-                            f"🧾 GST: ₹{row['product_gstamount']} ({row['product_gstrate']}%)\n"
+                            f"🧾 GST: ₹{row['gst_amount']} ({row['product_gstrate']}%)\n"
                             f"💰 Total: ₹{row['total_amount']}\n"
-                            f"💳 Payment: {row['payment_type']}\n"
+                            f"💳 Payment: {row['payment_term']}\n"
                             f"📅 Date: {row['sell_date']}\n"
                             f"---------------------------------\n"
                         )
@@ -316,7 +317,7 @@ def chatbot_response(user_input):
                             f"   🏢 Buyer: {row['buyer_company_name']}\n"
                             f"   📦 Product: {row['product_name']}\n"
                             f"   🔢 Qty: {row['product_quantity']}\n"
-                            f"   💳 Payment: {row['payment_type']}\n\n"
+                            f"   💳 Payment: {row['payment_term']}\n\n"
                         )
                 else:
                     response = f"⚠️ No sales found with amount ₹{amount}."
@@ -428,7 +429,7 @@ def chatbot_response(user_input):
                         f"{row['product_name']} | "
                         f"Qty: {row['product_quantity']} | "
                         f"₹{row['total_amount']} | "
-                        f"{row['payment_type']}\n"
+                        f"{row['payment_term']}\n"
                     )
             else:
                 response = "⚠️ No sales found for this buyer."

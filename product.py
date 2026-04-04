@@ -1,71 +1,96 @@
 import tkinter as tk
-from tkinter import *
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, END, FLAT, BOTH, X, Y, LEFT, RIGHT, W, EW, BOTTOM, NW
 import sqlite3
 import pandas as pd
 import dashboard
 
+# ─── Color Palette (matches dashboard) ───────────────────────────────────────
+C_BG      = "#0f1117"
+C_CARD    = "#1c2230"
+C_ACCENT  = "#00d4aa"
+C_ACCENT2 = "#4f8ef7"
+C_ACCENT3 = "#f7a94f"
+C_ACCENT4 = "#f7604f"
+C_TEXT    = "#e8eaf0"
+C_MUTED   = "#7a8499"
+C_HEADER  = "#12192b"
+C_BORDER  = "#2a3345"
+C_INPUT   = "#242d3d"
+C_HOVER   = "#00b894"
+
+# ─── Reusable helpers ─────────────────────────────────────────────────────────
+def styled_entry(parent, textvariable=None, width=28):
+    return tk.Entry(parent, textvariable=textvariable, width=width,
+                    bg=C_INPUT, fg=C_TEXT, insertbackground=C_TEXT,
+                    relief=FLAT, font=("Segoe UI", 10),
+                    highlightthickness=1,
+                    highlightbackground=C_BORDER,
+                    highlightcolor=C_ACCENT)
+
+def action_button(parent, text, color, command, width=11):
+    return tk.Button(parent, text=text, width=width,
+                     font=("Segoe UI", 10, "bold"),
+                     bg=color, fg=C_BG,
+                     activebackground=C_HOVER, activeforeground=C_BG,
+                     relief=FLAT, padx=8, pady=6,
+                     cursor="hand2", command=command)
+
+def styled_combo(parent, textvariable, values, width=27):
+    style = ttk.Style()
+    style.configure("Dark.TCombobox",
+                    fieldbackground=C_INPUT,
+                    background=C_INPUT,
+                    foreground=C_TEXT,
+                    arrowcolor=C_ACCENT,
+                    borderwidth=0,
+                    font=("Segoe UI", 10))
+    style.map("Dark.TCombobox",
+              fieldbackground=[("readonly", C_INPUT)],
+              foreground=[("readonly", C_TEXT)])
+    return ttk.Combobox(parent, textvariable=textvariable,
+                        values=values, state="readonly",
+                        width=width, style="Dark.TCombobox",
+                        font=("Segoe UI", 10))
+
+def kpi_card(parent, label, color):
+    frm = tk.Frame(parent, bg=C_CARD,
+                   highlightbackground=C_BORDER, highlightthickness=1)
+    tk.Frame(frm, bg=color, height=3).pack(fill=X)
+    tk.Label(frm, text=label, font=("Segoe UI", 8),
+             bg=C_CARD, fg=C_MUTED).pack(anchor=W, padx=10, pady=(6, 0))
+    val = tk.Label(frm, text="—", font=("Segoe UI", 16, "bold"),
+                   bg=C_CARD, fg=C_TEXT)
+    val.pack(anchor=W, padx=10, pady=(2, 8))
+    return frm, val
+
+
 product_id = None
+
 
 def open_product():
     global product_id
 
-    conn = sqlite3.connect("ERP_Billing.db")
+    conn   = sqlite3.connect("ERP_Billing.db")
     cursor = conn.cursor()
 
     root = tk.Tk()
-    root.title("Product Management Dashboard")
+    root.title("ERP Billing System – Product Management")
     root.state("zoomed")
-    root.configure(bg="#f0f2f5")
+    root.configure(bg=C_BG)
 
-    # ---------- Styling ----------
-    style = ttk.Style()
-    style.theme_use("clam")
+    # ── Variables ────────────────────────────────────────────────────────
+    short_name_var    = tk.StringVar()
+    company_name_var  = tk.StringVar()
+    hsn_code_var      = tk.StringVar()
+    product_name_var  = tk.StringVar()
+    product_price_var = tk.StringVar()
+    gst_rate_var      = tk.StringVar()
+    primary_unit_var  = tk.StringVar()
+    category_var      = tk.StringVar()
 
-    style.configure("TLabel", font=("Segoe UI", 11), background="#f0f2f5")
-    style.configure("TButton",
-                    font=("Segoe UI", 10, "bold"),
-                    padding=8)
-    style.configure("Treeview",
-                    font=("Segoe UI", 10),
-                    rowheight=28)
-    style.configure("Treeview.Heading",
-                    font=("Segoe UI", 10, "bold"))
-
-    # ---------- Functions ----------
-
-    def save_product():
-        name = product_name_var.get()
-        price = product_price_var.get()
-
-        if name == "" or price == "":
-            messagebox.showerror("ERP Billing", "Product Name and Price are required!")
-            return
-
-        cursor.execute("""
-            INSERT INTO product(
-                short_name, company_name, hsn_code,
-                product_name, product_price, product_gst_rate,
-                primary_unit, product_category, remark
-            )
-            VALUES(?,?,?,?,?,?,?,?,?)
-        """, (
-            short_name_var.get(),
-            company_name_var.get(),
-            hsn_code_var.get(),
-            name,
-            price,
-            gst_rate_var.get(),
-            primary_unit_var.get(),
-            category_var.get(),
-            remark_text.get("1.0", END).strip()
-        ))
-
-        conn.commit()
-        fetch_data()
-        clear_product()
-        summary_data()
-        messagebox.showinfo("ERP Billing", "Product saved successfully")
+    # ═══════════════════════════════════════════════════════════════════════
+    # FUNCTIONS
+    # ═══════════════════════════════════════════════════════════════════════
 
     def clear_product():
         global product_id
@@ -84,264 +109,335 @@ def open_product():
         tree.delete(*tree.get_children())
         cursor.execute("SELECT * FROM product")
         rows = cursor.fetchall()
-        for row in rows:
-            tree.insert("", END, values=row)
+        for idx, row in enumerate(rows):
+            tag = "odd" if idx % 2 == 0 else "even"
+            tree.insert("", END, values=row, tags=(tag,))
+        summary_data()
 
-    def on_select(event):
-        global product_id
-        selected = tree.focus()
-        if selected:
-            data = tree.item(selected)["values"]
-            product_id = data[0]
-
-            short_name_var.set(data[1])
-            company_name_var.set(data[2])
-            hsn_code_var.set(data[3])
-            product_name_var.set(data[4])
-            product_price_var.set(data[5])
-            gst_rate_var.set(data[6])
-            primary_unit_var.set(data[7])
-            category_var.set(data[8])
-
-            remark_text.delete("1.0", END)
-            remark_text.insert(END, data[9])
-
-    def on_update():
-        global product_id
-        if not product_id:
-            messagebox.showerror("ERP Billing", "Select a product to update")
+    def save_product():
+        name  = product_name_var.get().strip()
+        price = product_price_var.get().strip()
+        if not name or not price:
+            messagebox.showerror("ERP Billing", "Product Name and Price are required!")
             return
-
         cursor.execute("""
-            UPDATE product SET
-                short_name=?,
-                company_name=?,
-                hsn_code=?,
-                product_name=?,
-                product_price=?,
-                product_gst_rate=?,
-                primary_unit=?,
-                product_category=?,
-                remark=?
-            WHERE product_id=?
+            INSERT INTO product (
+                short_name, company_name, hsn_code,
+                product_name, product_price, product_gst_rate,
+                primary_unit, product_category, remark
+            ) VALUES (?,?,?,?,?,?,?,?,?)
         """, (
             short_name_var.get(),
             company_name_var.get(),
             hsn_code_var.get(),
-            product_name_var.get(),
-            product_price_var.get(),
+            name, price,
             gst_rate_var.get(),
             primary_unit_var.get(),
             category_var.get(),
+            remark_text.get("1.0", END).strip()
+        ))
+        conn.commit()
+        messagebox.showinfo("ERP Billing", "Product Saved Successfully ✅")
+        fetch_data()
+        clear_product()
+
+    def on_select(event):
+        global product_id
+        selected = tree.focus()
+        if not selected:
+            return
+        data = tree.item(selected)["values"]
+        product_id = data[0]
+        short_name_var.set(data[1])
+        company_name_var.set(data[2])
+        hsn_code_var.set(data[3])
+        product_name_var.set(data[4])
+        product_price_var.set(data[5])
+        gst_rate_var.set(data[6])
+        primary_unit_var.set(data[7])
+        category_var.set(data[8])
+        remark_text.delete("1.0", END)
+        remark_text.insert(END, data[9])
+
+    def on_update():
+        global product_id
+        if not product_id:
+            messagebox.showerror("ERP Billing", "Please select a product to update!")
+            return
+        cursor.execute("""
+            UPDATE product SET
+                short_name=?, company_name=?, hsn_code=?,
+                product_name=?, product_price=?, product_gst_rate=?,
+                primary_unit=?, product_category=?, remark=?
+            WHERE product_id=?
+        """, (
+            short_name_var.get(), company_name_var.get(), hsn_code_var.get(),
+            product_name_var.get(), product_price_var.get(), gst_rate_var.get(),
+            primary_unit_var.get(), category_var.get(),
             remark_text.get("1.0", END).strip(),
             product_id
         ))
-
         conn.commit()
+        messagebox.showinfo("ERP Billing", "Product Updated Successfully ✅")
         fetch_data()
         clear_product()
-        summary_data()
 
     def on_delete():
         global product_id
         if not product_id:
-            messagebox.showerror("ERP Billing", "Select a product to delete")
+            messagebox.showerror("ERP Billing", "Please select a product to delete!")
             return
-
-        cursor.execute("DELETE FROM product WHERE product_id=?", (product_id,))
-        conn.commit()
-
-        fetch_data()
-        clear_product()
-        summary_data()
-
-    def data_analysis():
-        df = pd.read_sql_query("SELECT * FROM product", conn)
-
-        if df.empty:
-            messagebox.showinfo("ERP", "No data available for analysis.")
-            return
-        
-        selected_df = df[["product_price", "product_gst_rate"]]
-        
-        # ---------- Calculations ----------
-        avg_vals = selected_df.mean().round(2)
-        max_vals = selected_df.max().round(2)
-        min_vals = selected_df.min().round(2)
-        median_vals = selected_df.median().round(2)
-        
-        total_products = len(df)
-        
-        group_data = df.groupby("product_category").agg(
-            total_products=("product_name", "count")
-        )
-        
-        
-        # ---------- FORMAT OUTPUT ----------
-        data = ""
-        data += "╔══════════════════════════════════════╗\n"
-        data += "║        ERP PRODUCT ANALYSIS          ║\n"
-        data += "╚══════════════════════════════════════╝\n\n"
-        
-        
-        # ---------- Basic Statistics ----------
-        data += "PRODUCT PRICE & GST STATISTICS\n"
-        data += "------------------------------------------------\n"
-        data += f"{'Metric':<15}{'Price':<15}{'GST Rate'}\n"
-        data += "------------------------------------------------\n"
-        
-        data += f"{'Average':<15}{avg_vals['product_price']:<15}{avg_vals['product_gst_rate']}\n"
-        data += f"{'Maximum':<15}{max_vals['product_price']:<15}{max_vals['product_gst_rate']}\n"
-        data += f"{'Minimum':<15}{min_vals['product_price']:<15}{min_vals['product_gst_rate']}\n"
-        data += f"{'Median':<15}{median_vals['product_price']:<15}{median_vals['product_gst_rate']}\n"
-        
-        data += "\n"
-        
-        
-        # ---------- Total Products ----------
-        data += "TOTAL PRODUCTS IN SYSTEM\n"
-        data += "------------------------------------------------\n"
-        data += f"Total Products : {total_products}\n\n"
-        
-        
-        # ---------- Category Analysis ----------
-        data += "PRODUCT CATEGORY DISTRIBUTION\n"
-        data += "------------------------------------------------\n"
-        data += f"{'Category':<20}{'Total Products'}\n"
-        data += "------------------------------------------------\n"
-        
-        for category, row in group_data.iterrows():
-            data += f"{category:<20}{row['total_products']}\n"
-        
-        data += "\n=========================================="
-        
-        
-        # ---------- Show Result ----------
-        messagebox.showinfo("ERP Data Analysis", data)
+        if messagebox.askyesno("ERP Billing", "Are you sure you want to delete this product?"):
+            cursor.execute("DELETE FROM product WHERE product_id=?", (product_id,))
+            conn.commit()
+            messagebox.showinfo("ERP Billing", "Product Deleted ✅")
+            fetch_data()
+            clear_product()
 
     def summary_data():
         cursor.execute("SELECT COUNT(product_id) FROM product")
-        total = cursor.fetchone()[0]
-        total_product.config(text=f"Total Products : {total}")
+        total = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT AVG(product_price) FROM product")
+        avg_price = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT MAX(product_price) FROM product")
+        max_price = cursor.fetchone()[0] or 0
+
+        cursor.execute("SELECT COUNT(DISTINCT product_category) FROM product")
+        categories = cursor.fetchone()[0] or 0
+
+        kpi_total_val.config(text=str(total))
+        kpi_avg_val.config(text=f"₹{avg_price:,.2f}")
+        kpi_max_val.config(text=f"₹{max_price:,.2f}")
+        kpi_cat_val.config(text=str(categories))
+
+    def data_analysis():
+        df = pd.read_sql_query("SELECT * FROM product", conn)
+        if df.empty:
+            messagebox.showinfo("ERP", "No data available for analysis.")
+            return
+
+        selected_df  = df[["product_price", "product_gst_rate"]]
+        avg_vals     = selected_df.mean().round(2)
+        max_vals     = selected_df.max().round(2)
+        min_vals     = selected_df.min().round(2)
+        median_vals  = selected_df.median().round(2)
+        total_products = len(df)
+
+        group_data = df.groupby("product_category").agg(
+            total_products=("product_name", "count")
+        )
+
+        data  = "╔══════════════════════════════════════╗\n"
+        data += "║        ERP PRODUCT ANALYSIS          ║\n"
+        data += "╚══════════════════════════════════════╝\n\n"
+        data += "PRODUCT PRICE & GST STATISTICS\n"
+        data += "─" * 46 + "\n"
+        data += f"{'Metric':<15}{'Price (₹)':<18}{'GST Rate (%)'}\n"
+        data += "─" * 46 + "\n"
+        data += f"{'Average':<15}{avg_vals['product_price']:<18}{avg_vals['product_gst_rate']}\n"
+        data += f"{'Maximum':<15}{max_vals['product_price']:<18}{max_vals['product_gst_rate']}\n"
+        data += f"{'Minimum':<15}{min_vals['product_price']:<18}{min_vals['product_gst_rate']}\n"
+        data += f"{'Median':<15}{median_vals['product_price']:<18}{median_vals['product_gst_rate']}\n\n"
+        data += "TOTAL PRODUCTS IN SYSTEM\n"
+        data += "─" * 46 + "\n"
+        data += f"Total Products : {total_products}\n\n"
+        data += "PRODUCT CATEGORY DISTRIBUTION\n"
+        data += "─" * 46 + "\n"
+        data += f"{'Category':<24}{'Total Products'}\n"
+        data += "─" * 46 + "\n"
+        for category, row in group_data.iterrows():
+            data += f"{category:<24}{row['total_products']}\n"
+        data += "═" * 46
+
+        messagebox.showinfo("ERP – Product Analysis", data)
 
     def move_back():
         root.destroy()
         dashboard.open_dashboard()
 
-    # ---------- Header ----------
-    header = Frame(root, bg="#1f6aa5", height=70)
+    # ═══════════════════════════════════════════════════════════════════════
+    # TREEVIEW STYLE
+    # ═══════════════════════════════════════════════════════════════════════
+    style = ttk.Style()
+    style.theme_use("clam")
+    style.configure("Dark.Treeview",
+                    background=C_CARD, foreground=C_TEXT,
+                    fieldbackground=C_CARD, rowheight=30,
+                    font=("Segoe UI", 10), borderwidth=0)
+    style.configure("Dark.Treeview.Heading",
+                    background=C_HEADER, foreground=C_ACCENT,
+                    font=("Segoe UI", 10, "bold"), relief=FLAT)
+    style.map("Dark.Treeview",
+              background=[("selected", "#1e3a5f")],
+              foreground=[("selected", C_TEXT)])
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # HEADER
+    # ═══════════════════════════════════════════════════════════════════════
+    header = tk.Frame(root, bg=C_HEADER, height=64)
     header.pack(fill=X)
+    header.pack_propagate(False)
 
-    Label(header,
-          text="Product Management Dashboard",
-          font=("Segoe UI", 22, "bold"),
-          bg="#1f6aa5",
-          fg="white").pack(pady=15)
+    dot = tk.Canvas(header, width=36, height=36, bg=C_HEADER, highlightthickness=0)
+    dot.pack(side=LEFT, padx=(20, 6), pady=14)
+    dot.create_oval(4, 4, 32, 32, fill=C_ACCENT, outline="")
 
-    # ---------- Main Frame ----------
-    main_frame = Frame(root, bg="#f0f2f5")
-    main_frame.pack(fill=BOTH, expand=True, padx=20, pady=20)
+    tk.Label(header, text="ERP Billing System",
+             font=("Segoe UI", 18, "bold"),
+             bg=C_HEADER, fg=C_TEXT).pack(side=LEFT, pady=14)
+    tk.Label(header, text="Product Management",
+             font=("Segoe UI", 11),
+             bg=C_HEADER, fg=C_MUTED).pack(side=LEFT, padx=(8, 0), pady=17)
 
-    # ---------- Left Frame ----------
-    form_frame = Frame(main_frame, bg="white")
-    form_frame.pack(side=LEFT, fill=Y, padx=10, ipadx=15, ipady=15)
+    action_button(header, "← Dashboard", C_ACCENT2, move_back, width=14).pack(
+        side=RIGHT, padx=20, pady=14)
 
-    Label(form_frame,
-          text="Product Details",
-          font=("Segoe UI", 14, "bold"),
-          bg="white").grid(row=0, columnspan=2, pady=15)
+    # ═══════════════════════════════════════════════════════════════════════
+    # KPI ROW
+    # ═══════════════════════════════════════════════════════════════════════
+    kpi_row = tk.Frame(root, bg=C_BG)
+    kpi_row.pack(fill=X, padx=16, pady=(14, 0))
 
-    short_name_var = StringVar()
-    company_name_var = StringVar()
-    hsn_code_var = StringVar()
-    product_name_var = StringVar()
-    product_price_var = StringVar()
-    gst_rate_var = StringVar()
-    primary_unit_var = StringVar()
-    category_var = StringVar()
-
-    labels = [
-        "Short Name",
-        "Company Name",
-        "HSN Code",
-        "Product Name",
-        "Product Price",
-        "GST Rate",
-        "Primary Unit",
-        "Category"
+    kpi_cfgs = [
+        ("Total Products",      C_ACCENT),
+        ("Avg Price (₹)",       C_ACCENT2),
+        ("Max Price (₹)",       C_ACCENT3),
+        ("Categories",          C_ACCENT4),
     ]
 
-    for i, text in enumerate(labels):
-        ttk.Label(form_frame, text=text).grid(row=i+1, column=0, sticky=W, pady=8)
+    kpi_vals = []
+    for i, (lbl, col) in enumerate(kpi_cfgs):
+        frm, val_lbl = kpi_card(kpi_row, lbl, col)
+        frm.grid(row=0, column=i, padx=6, pady=4, sticky="nsew")
+        kpi_row.columnconfigure(i, weight=1)
+        kpi_vals.append(val_lbl)
 
-    ttk.Entry(form_frame, textvariable=short_name_var, width=30).grid(row=1, column=1)
-    ttk.Entry(form_frame, textvariable=company_name_var, width=30).grid(row=2, column=1)
-    ttk.Entry(form_frame, textvariable=hsn_code_var, width=30).grid(row=3, column=1)
-    ttk.Entry(form_frame, textvariable=product_name_var, width=30).grid(row=4, column=1)
-    ttk.Entry(form_frame, textvariable=product_price_var, width=30).grid(row=5, column=1)
+    kpi_total_val, kpi_avg_val, kpi_max_val, kpi_cat_val = kpi_vals
 
-    ttk.Combobox(form_frame, textvariable=gst_rate_var,
-                 values=["0", "5", "12", "18", "28"],
-                 state="readonly", width=27).grid(row=6, column=1)
+    # ═══════════════════════════════════════════════════════════════════════
+    # MAIN LAYOUT
+    # ═══════════════════════════════════════════════════════════════════════
+    main_frame = tk.Frame(root, bg=C_BG)
+    main_frame.pack(fill=BOTH, expand=True, padx=16, pady=14)
 
-    ttk.Combobox(form_frame, textvariable=primary_unit_var,
-                 values=["PCS", "KG", "GRAM", "LITER", "METER", "BOX"],
-                 state="readonly", width=27).grid(row=7, column=1)
+    # ── LEFT: Form card ──────────────────────────────────────────────────
+    form_card = tk.Frame(main_frame, bg=C_CARD,
+                         highlightbackground=C_BORDER, highlightthickness=1)
+    form_card.pack(side=LEFT, fill=Y, padx=(0, 10), ipadx=16, ipady=10)
 
-    ttk.Combobox(form_frame, textvariable=category_var,
-                 values=["Grocery", "Electronics", "Stationery", "Clothing", "Other"],
-                 state="readonly", width=27).grid(row=8, column=1)
+    tk.Frame(form_card, bg=C_ACCENT, height=3).pack(fill=X)
+    tk.Label(form_card, text="🏷️  Product Details",
+             font=("Segoe UI", 13, "bold"),
+             bg=C_CARD, fg=C_TEXT).pack(pady=(14, 4), padx=16, anchor=W)
+    tk.Frame(form_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(0, 10))
 
-    ttk.Label(form_frame, text="Remark").grid(row=9, column=0, sticky=NW, pady=8)
-    remark_text = Text(form_frame, width=23, height=4, font=("Segoe UI", 10))
-    remark_text.grid(row=9, column=1)
+    form_inner = tk.Frame(form_card, bg=C_CARD)
+    form_inner.pack(padx=16)
 
-    # ---------- Buttons ----------
-    button_frame = Frame(form_frame, bg="white")
-    button_frame.grid(row=10, columnspan=2, pady=20)
+    field_cfgs = [
+        ("Short Name",    "entry", short_name_var,    None),
+        ("Company Name",  "entry", company_name_var,  None),
+        ("HSN Code",      "entry", hsn_code_var,      None),
+        ("Product Name *","entry", product_name_var,  None),
+        ("Product Price *","entry",product_price_var, None),
+        ("GST Rate (%)",  "combo", gst_rate_var,      ["0", "5", "12", "18", "28"]),
+        ("Primary Unit",  "combo", primary_unit_var,  ["PCS", "KG", "GRAM", "LITER", "METER", "BOX"]),
+        ("Category",      "combo", category_var,      ["Grocery", "Electronics", "Stationery", "Clothing", "Other"]),
+    ]
 
-    ttk.Button(button_frame, text="Save", command=save_product).grid(row=0, column=0, padx=5)
-    ttk.Button(button_frame, text="Update", command=on_update).grid(row=0, column=1, padx=5)
-    ttk.Button(button_frame, text="Delete", command=on_delete).grid(row=0, column=2, padx=5)
-    ttk.Button(button_frame, text="Clear", command=clear_product).grid(row=0, column=3, padx=5)
-    ttk.Button(button_frame, text="Analysis", command=data_analysis).grid(row=0, column=4, padx=5)
-    ttk.Button(button_frame, text="Back", command=move_back).grid(row=0, column=5, padx=5)
+    for i, (label, ftype, var, vals) in enumerate(field_cfgs):
+        tk.Label(form_inner, text=label,
+                 font=("Segoe UI", 9),
+                 bg=C_CARD, fg=C_MUTED).grid(row=i*2, column=0,
+                                              sticky=W, pady=(8, 0))
+        if ftype == "combo":
+            w = styled_combo(form_inner, var, vals)
+        else:
+            w = styled_entry(form_inner, textvariable=var)
+        w.grid(row=i*2+1, column=0, sticky=EW, pady=(2, 0))
 
-    # ---------- Right Frame ----------
-    data_frame = Frame(main_frame, bg="white")
-    data_frame.pack(side=RIGHT, fill=BOTH, expand=True, padx=10)
+    # Remark
+    tk.Label(form_inner, text="Remark",
+             font=("Segoe UI", 9),
+             bg=C_CARD, fg=C_MUTED).grid(row=16, column=0, sticky=NW, pady=(8, 0))
+    remark_text = tk.Text(form_inner, width=28, height=3,
+                          font=("Segoe UI", 10),
+                          bg=C_INPUT, fg=C_TEXT,
+                          insertbackground=C_TEXT,
+                          relief=FLAT,
+                          highlightthickness=1,
+                          highlightbackground=C_BORDER,
+                          highlightcolor=C_ACCENT)
+    remark_text.grid(row=17, column=0, sticky=EW, pady=(2, 0))
 
-    Label(data_frame,
-          text="Product Records",
-          font=("Segoe UI", 14, "bold"),
-          bg="white").pack(pady=10)
+    # Buttons
+    tk.Frame(form_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(14, 8))
+    btn_grid = tk.Frame(form_card, bg=C_CARD)
+    btn_grid.pack(padx=16, pady=(0, 10))
+
+    btn_cfg = [
+        ("💾 Save",     C_ACCENT,  save_product,   0, 0),
+        ("✏️ Update",   C_ACCENT2, on_update,       0, 1),
+        ("🗑 Delete",   C_ACCENT4, on_delete,       0, 2),
+        ("✖ Clear",    C_MUTED,   clear_product,   1, 0),
+        ("📊 Analysis", C_ACCENT3, data_analysis,   1, 1),
+    ]
+    for text, color, cmd, r, c in btn_cfg:
+        action_button(btn_grid, text, color, cmd, width=11).grid(
+            row=r, column=c, padx=4, pady=4)
+
+    # ── RIGHT: Table card ────────────────────────────────────────────────
+    table_card = tk.Frame(main_frame, bg=C_CARD,
+                          highlightbackground=C_BORDER, highlightthickness=1)
+    table_card.pack(side=RIGHT, fill=BOTH, expand=True)
+
+    tk.Frame(table_card, bg=C_ACCENT2, height=3).pack(fill=X)
+    tk.Label(table_card, text="📋  Product Records",
+             font=("Segoe UI", 13, "bold"),
+             bg=C_CARD, fg=C_TEXT).pack(anchor=W, padx=16, pady=(12, 4))
+    tk.Frame(table_card, bg=C_BORDER, height=1).pack(fill=X, padx=16, pady=(0, 6))
+
+    tree_wrap = tk.Frame(table_card, bg=C_CARD)
+    tree_wrap.pack(fill=BOTH, expand=True, padx=10, pady=(0, 10))
 
     columns = ("ID", "Short", "Company", "HSN", "Name", "Price", "GST", "Unit", "Category", "Remark")
-    tree = ttk.Treeview(data_frame, columns=columns, show="headings")
+    tree = ttk.Treeview(tree_wrap, columns=columns,
+                        show="headings", style="Dark.Treeview")
 
+    col_widths = {"ID": 45, "Short": 70, "Company": 110, "HSN": 80,
+                  "Name": 130, "Price": 80, "GST": 60,
+                  "Unit": 70, "Category": 100, "Remark": 140}
     for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=110)
+        tree.column(col, width=col_widths.get(col, 90), anchor=W)
 
+    tree.tag_configure("odd",  background="#1a2234")
+    tree.tag_configure("even", background=C_CARD)
+
+    vsb = ttk.Scrollbar(tree_wrap, orient="vertical",   command=tree.yview)
+    hsb = ttk.Scrollbar(tree_wrap, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+    vsb.pack(side=RIGHT, fill=Y)
+    hsb.pack(side=BOTTOM, fill=X)
     tree.pack(fill=BOTH, expand=True)
-
-    scrollbar = ttk.Scrollbar(data_frame, orient=VERTICAL, command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=RIGHT, fill=Y)
-
     tree.bind("<<TreeviewSelect>>", on_select)
 
-    # ---------- Summary ----------
-    summary_frame = Frame(root, bg="#f0f2f5")
-    summary_frame.pack(pady=10)
+    # ═══════════════════════════════════════════════════════════════════════
+    # FOOTER
+    # ═══════════════════════════════════════════════════════════════════════
+    footer = tk.Frame(root, bg=C_HEADER, height=30)
+    footer.pack(fill=X, side=BOTTOM)
+    footer.pack_propagate(False)
+    tk.Label(footer,
+             text="Developed by Mahendra Suthar  ·  ERP Billing System",
+             font=("Segoe UI", 8),
+             bg=C_HEADER, fg=C_MUTED).pack(pady=7)
 
-    total_product = Label(summary_frame,
-                          text="",
-                          font=("Segoe UI", 11, "bold"),
-                          bg="#f0f2f5")
-    total_product.pack()
-
+    # ═══════════════════════════════════════════════════════════════════════
+    # INITIAL LOAD
+    # ═══════════════════════════════════════════════════════════════════════
     fetch_data()
-    summary_data()
-
     root.mainloop()
